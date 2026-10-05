@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+CHOICE=$(echo -e "󰍃  Esci dalla sessione\n󰜉  Riavvia\n󰐥  Spegni\n󰒲  Sospendi" | \
+  fuzzel --dmenu --prompt "Sistema  " --width 28 --lines 4)
+
+case "$CHOICE" in
+  *Esci*)   labwc --exit ;;
+  *Riavvia*) systemctl reboot ;;
+  *Spegni*)  systemctl poweroff ;;
+  *Sospendi*) systemctl suspend ;;
+esac

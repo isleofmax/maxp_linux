@@ -1,0 +1,14 @@
+# Menu stile scuro (come Waybar / Fuzzel)
+menu.border.width: 1
+menu.border.color: #333333
+menu.items.bg.color: #1e1e1e
+menu.items.text.color: #eeeeee
+menu.items.active.bg.color: #333333
+menu.items.active.text.color: #ffffff
+menu.items.padding.x: 12
+menu.items.padding.y: 6
+menu.separator.color: #444444
+menu.title.bg.color: #1e1e1e
+menu.title.text.color: #aaaaaa
+menu.width.min: 180
+menu.width.max: 280

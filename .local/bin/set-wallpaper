@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Cambia SOLO questa riga col percorso reale della tua immagine:
+WALL="$HOME/.config/labwc/backgrounds/1-cosmic.webp"
+
+pkill -x swaybg 2>/dev/null
+sleep 0.3
+
+if [[ ! -f "$WALL" ]]; then
+    # nero/grigio se manca il file (così capisci che il path è sbagliato)
+    exec swaybg -c '#1a1a1a'
+fi
+
+exec swaybg -i "$WALL" -m fill

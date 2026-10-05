@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<openbox_menu>
+  <menu id="root-menu" label="">
+    <item label="Konsole">
+      <action name="Execute" command="konsole"/>
+    </item>
+    <item label="Chrome">
+      <action name="Execute" command="chromium"/>
+    </item>
+    <item label="Ricarica configurazione">
+      <action name="Reconfigure"/>
+    </item>
+    <item label="Esci">
+      <action name="Exit"/>
+    </item>
+  </menu>
+</openbox_menu>

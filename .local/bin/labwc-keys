@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# labwc-keys – scorciatoie in tabella (font monospace)
+
+RC="${XDG_CONFIG_HOME:-$HOME/.config}/labwc/rc.xml"
+
+if [[ ! -f "$RC" ]]; then
+    notify-send "labwc-keys" "File non trovato: $RC"
+    exit 1
+fi
+
+LIST=$(python3 - <<'PY'
+import xml.etree.ElementTree as ET
+import os
+
+rc = os.path.expanduser("~/.config/labwc/rc.xml")
+tree = ET.parse(rc)
+root = tree.getroot()
+
+def text(el, default=""):
+    if el is None:
+        return default
+    return (el.text or "").strip() or default
+
+def pretty(key):
+    reps = [
+        ("W-S-", "Super+Shift+"),
+        ("W-A-", "Super+Alt+"),
+        ("C-A-", "Ctrl+Alt+"),
+        ("W-C-", "Super+Ctrl+"),
+        ("W-", "Super+"),
+        ("A-", "Alt+"),
+        ("C-", "Ctrl+"),
+        ("S-", "Shift+"),
+    ]
+    for old, new in reps:
+        if key.startswith(old):
+            return new + key[len(old):]
+    return key
+
+binds = []
+for kb in root.iter("keybind"):
+    key = kb.get("key") or text(kb.find("key"))
+    if not key:
+        continue
+
+    actions = []
+    for action in kb.findall("action"):
+        name = action.get("name") or text(action.find("name"))
+        cmd  = action.get("command") or text(action.find("command"))
+        menu = action.get("menu") or text(action.find("menu"))
+        if cmd:
+            short = cmd.replace(os.path.expanduser("~"), "~")
+            if len(short) > 40:
+                short = short[:37] + "..."
+            actions.append(f"{name}: {short}")
+        elif menu:
+            actions.append(f"{name} → {menu}")
+        elif name:
+            actions.append(name)
+
+    if not actions:
+        name = kb.get("name.action")
+        cmd  = kb.get("command.action")
+        if name and cmd:
+            actions.append(f"{name}: {cmd}")
+        elif name:
+            actions.append(name)
+
+    action_str = " | ".join(actions) if actions else "(nessuna azione)"
+    binds.append((pretty(key), action_str))
+
+binds.sort(key=lambda x: x[0].lower())
+
+# Colonna fissa: 24 caratteri per il tasto
+W = 24
+sep = " │ "
+
+print(f"{'TASTO':<{W}}{sep}AZIONE")
+print(f"{'─' * W}{sep}{'─' * 36}")
+
+for key, action in binds:
+    print(f"{key:<{W}}{sep}{action}")
+PY
+)
+
+# Font MONOSPACE obbligatorio per l'allineamento
+echo "$LIST" | fuzzel --dmenu \
+    --font "JetBrainsMono Nerd Font:size=13" \
+    --prompt "Scorciatoie  " \
+    --width 72 \
+    --lines 18 \
+    --anchor center \
+    >/dev/null

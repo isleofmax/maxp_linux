@@ -1,0 +1,5 @@
+#!/bin/sh
+~/.local/bin/set-wallpaper &
+sleep 1
+waybar &                     # se installi waybar
+# dunst &                      # notifiche

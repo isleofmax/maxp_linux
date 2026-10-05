@@ -1,0 +1,187 @@
+#!/usr/bin/env bash
+# wifi-menu – wrapper: lista generata in Python (una rete per riga)
+
+exec python3 - "$@" <<'PY'
+import subprocess
+import os
+import sys
+
+def run(cmd):
+    try:
+        return subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
+    except Exception:
+        return ""
+
+def notify(msg):
+    subprocess.run(["notify-send", "Wi‑Fi", msg], check=False)
+
+# Rescan non bloccante
+subprocess.Popen(["nmcli", "device", "wifi", "rescan"],
+                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+raw = run(["nmcli", "-t", "-f", "SIGNAL,SSID,SECURITY", "device", "wifi", "list"])
+
+networks = []
+seen = set()
+
+for line in raw.splitlines():
+    line = line.strip()
+    if not line:
+        continue
+
+    # SIGNAL è il primo campo numerico; SECURITY l'ultimo; SSID in mezzo
+    # nmcli escape ":" in SSID come \:
+    parts = []
+    buf = ""
+    i = 0
+    while i < len(line):
+        if line[i] == "\\" and i + 1 < len(line) and line[i + 1] == ":":
+            buf += ":"
+            i += 2
+            continue
+        if line[i] == ":":
+            parts.append(buf)
+            buf = ""
+            i += 1
+            continue
+        buf += line[i]
+        i += 1
+    parts.append(buf)
+
+    if len(parts) < 2:
+        continue
+
+    try:
+        signal = int(parts[0])
+    except ValueError:
+        continue
+
+    security = parts[-1] if len(parts) >= 3 else ""
+    ssid = ":".join(parts[1:-1]) if len(parts) >= 3 else parts[1]
+    ssid = ssid.strip()
+
+    if not ssid or ssid in seen:
+        continue
+    seen.add(ssid)
+
+    if signal >= 75:
+        icon = "󰤨"
+    elif signal >= 50:
+        icon = "󰤥"
+    elif signal >= 25:
+        icon = "󰤢"
+    else:
+        icon = "󰤟"
+
+    lock = "󰌾" if any(x in security for x in ("WPA", "WEP", "802.1")) else "󰌿"
+
+    # UNA riga = UNA rete
+    networks.append((signal, f"{icon}  {ssid:<26.26}  {signal:3d}%  {lock}", ssid))
+
+networks.sort(key=lambda x: -x[0])
+
+current = ""
+for line in run(["nmcli", "-t", "-f", "ACTIVE,SSID", "dev", "wifi"]).splitlines():
+    if line.startswith("yes:"):
+        current = line.split(":", 1)[1]
+        break
+
+menu_lines = [
+    "󰖩  Ricarica lista",
+    "󰖪  Disattiva Wi‑Fi",
+    "󰒓  Gestisci reti (nm-connection-editor)",
+    "─" * 42,
+]
+if current:
+    menu_lines.insert(0, f"✓  Connesso: {current}")
+    menu_lines.insert(1, "─" * 42)
+
+for _, row, _ in networks:
+    menu_lines.append(row)
+
+menu_text = "\n".join(menu_lines)
+
+fuzzel = subprocess.run(
+    [
+        "fuzzel", "--dmenu",
+        "--font", "JetBrainsMono Nerd Font:size=13",
+        "--prompt", "Wi‑Fi  ",
+        "--width", "48",
+        "--lines", "16",
+        "--anchor", "center",
+    ],
+    input=menu_text,
+    text=True,
+    capture_output=True,
+)
+
+chosen = (fuzzel.stdout or "").strip()
+if not chosen:
+    sys.exit(0)
+
+if "Ricarica" in chosen:
+    subprocess.run(["nmcli", "device", "wifi", "rescan"])
+    os.execv(sys.argv[0], sys.argv)
+
+if "Disattiva" in chosen:
+    subprocess.run(["nmcli", "radio", "wifi", "off"])
+    notify("Wi‑Fi disattivato")
+    sys.exit(0)
+
+if "Gestisci reti" in chosen or "nm-connection" in chosen:
+    subprocess.Popen(["nm-connection-editor"])
+    sys.exit(0)
+
+if chosen.startswith("─") or chosen.startswith("✓"):
+    sys.exit(0)
+
+# SSID dalla riga tabella
+ssid = chosen
+# togli icona iniziale
+if "  " in ssid:
+    ssid = ssid.split("  ", 1)[1]
+# togli percentuale e dopo
+if "  " in ssid and "%" in ssid:
+    # prendi tutto prima di "  NN%"
+    import re
+    m = re.match(r"(.+?)\s+\d+%\s*", ssid)
+    if m:
+        ssid = m.group(1).rstrip()
+
+ssid = ssid.strip()
+if not ssid:
+    sys.exit(1)
+
+if ssid == current:
+    notify(f"Già connesso a {ssid}")
+    sys.exit(0)
+
+# Profilo salvato?
+saved = run(["nmcli", "-t", "-f", "NAME", "connection", "show"]).splitlines()
+if ssid in saved:
+    r = subprocess.run(["nmcli", "connection", "up", "id", ssid])
+    notify(f"Connesso a {ssid}" if r.returncode == 0 else f"Errore su {ssid}")
+    sys.exit(0)
+
+# Password
+pw = subprocess.run(
+    [
+        "fuzzel", "--dmenu",
+        "--font", "JetBrainsMono Nerd Font:size=13",
+        "--prompt", f"Password ({ssid})  ",
+        "--password",
+        "--width", "40",
+    ],
+    input="",
+    text=True,
+    capture_output=True,
+)
+password = (pw.stdout or "").strip()
+
+if password:
+    r = subprocess.run(["nmcli", "device", "wifi", "connect", ssid, "password", password])
+else:
+    r = subprocess.run(["nmcli", "device", "wifi", "connect", ssid])
+
+notify(f"Connesso a {ssid}" if r.returncode == 0 else "Connessione fallita")
+PY
